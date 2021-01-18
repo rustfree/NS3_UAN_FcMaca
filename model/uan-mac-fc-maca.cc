@@ -28,8 +28,9 @@ pkt |  |ack or time
 #include <iostream>
 #define MAX_TIMEOUT_COUNT 1//最多重发次数
 #define RANDOM_BOUND 8
+#define SEND_FINISH_INTERVAL 4
 #define MAX_TIME  6//超时时间
-#define WAIT_CTS_TIME  6
+#define WAIT_CTS_TIME  7
 /*
 Mac类型（type)：
 0:数据包，无CRC
@@ -242,11 +243,12 @@ UanMacFcMaca::RxPacketGood (Ptr<Packet> pkt, double sinr, UanTxMode txMode)
                     pkt = m_queue->Dequeue();
                     txDataNum ++;
                     m_tosendNum -- ;
+                    
+                    //m_phy->SendPacket (pkt, GetTxModeIndex ());
+                    Simulator::Schedule (Seconds (0.3), &UanMacFcMaca::sendPacketToPhy, this, pkt,header.GetProtocolNumber ());
                     if(m_tosendNum == 0){
                         m_state = IDLE;
                     }
-                     m_phy->SendPacket (pkt, GetTxModeIndex ());
-                    
                 }else
                 {
                     NS_LOG_DEBUG ("send data pkt when phy is busy or queue empty!");
@@ -385,7 +387,7 @@ UanMacFcMaca::HandleCTSTimeout(Ptr<Packet> pkt,uint16_t protocolNumber)//待改�
     //Simulator::Cancel(m_HandleTimeoutEvent);
     //这个时候还是WAITCTS状态？？
     if(m_state == WAITCTS){  
-        double delay = m_erv->GetValue(0,RANDOM_BOUND)*m_timeoutCnt + MAX_TIME;
+        double delay = m_erv->GetValue(0,RANDOM_BOUND) + MAX_TIME;
         if(m_rtsToSendEvent.IsExpired()	){
             m_state = IDLE;
             m_rtsToSendEvent = Simulator::Schedule (Seconds (delay), &UanMacFcMaca::SendRTSPacket, this);//??待调整,需要判断这个事件是否为空
@@ -431,7 +433,7 @@ void UanMacFcMaca::NotifyTxEnd(void)//可以让物理层确定发送延迟后，
    if(m_state == IDLE)
    {
       if(m_rtsToSendEvent.IsExpired()	){
-          m_rtsToSendEvent = Simulator::Schedule (Seconds (m_erv->GetValue(0,4) + MAX_TIME), &UanMacFcMaca::SendRTSPacket, this);//
+          m_rtsToSendEvent = Simulator::Schedule (Seconds (m_erv->GetValue(0,4) + MAX_TIME + SEND_FINISH_INTERVAL), &UanMacFcMaca::SendRTSPacket, this);//
       }
    }else if(m_state == TOSEND){
       Ptr<Packet> pkt;
